@@ -1,0 +1,305 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta http-equiv="X-UA-Compatible" content="ie=edge">
+    <title>Document</title>
+    <!-- <script src="https://cdnjs.cloudflare.com/ajax/libs/web3/1.2.9/web3.min.js"></script>
+    <script src="https://cdn.ethers.io/lib/ethers-5.0.umd.min.js" type="text/javascript"></script> -->
+    <!-- <script src="scripts/web3.min.js"></script> -->
+    <script src="scripts/ethers-5.0.umd.min.js"></script>
+    <script src="https://bundle.run/buffer@6.0.3"></script>
+    <script src="https://bundle.run/eth-sig-util@3.0.1"></script>
+    <!-- <script src="https://bundle.run/walletconnect-web3-provider@0.7.28"></script> -->
+    <style>
+        body {
+            background-color:#F0F0F0;
+            padding: 2em;
+            font-family: 'Raleway','Source Sans Pro', 'Arial';
+        }
+        .container {
+            width: 50%;
+            margin: 0 auto;
+        }
+        label {
+            display:block;
+            margin-bottom:10px;
+        }
+        input {
+            padding:10px;
+            width: 50%;
+            margin-bottom: 1em;
+        }
+        button {
+            margin: 2em 0;
+            padding: 1em 4em;
+            display:block;
+        }
+        #one {
+            padding:1em;
+            background-color:#fff;
+            margin: 1em 0;
+        }
+    </style>
+    <script>
+    const abi = [
+        {
+        "inputs": [
+            {
+            "internalType": "string",
+            "name": "_greeting",
+            "type": "string"
+            }
+        ],
+        "stateMutability": "nonpayable",
+        "type": "constructor"
+        },
+        {
+        "anonymous": false,
+        "inputs": [
+            {
+            "indexed": false,
+            "internalType": "string",
+            "name": "data1",
+            "type": "string"
+            }
+        ],
+        "name": "GreetingChanged",
+        "type": "event"
+        },
+        {
+        "inputs": [],
+        "name": "greet",
+        "outputs": [
+            {
+            "internalType": "string",
+            "name": "",
+            "type": "string"
+            }
+        ],
+        "stateMutability": "view",
+        "type": "function"
+        },
+        {
+        "inputs": [
+            {
+            "internalType": "string",
+            "name": "_greeting",
+            "type": "string"
+            }
+        ],
+        "name": "setGreeting",
+        "outputs": [],
+        "stateMutability": "nonpayable",
+        "type": "function"
+        }
+    ];
+    const contractAddress = "0x5fbdb2315678afecb367f032d93f642f64180aa3"; 
+    var greeterContract, greeterContract_rw, signer, provider;
+    var btnConnect, btnUpdate, divAddress, btnEncrypt, btnDecrypt, spanEncryptOut, spanDecryptOut, txtEncryptTo, txtEncrypt, txtDecrypt;
+    var simDisconnect = false;
+    var currentAccount = window.ethereum.selectedAddress;
+    
+    function connected() {
+        return ethereum.selectedAddress != null && currentAccount != null;
+    }
+    function displayConnected() {
+        if (connected()) {
+            console.log("Display State: Unlocked");
+            btnConnect.innerHTML = "Lock Wallet";
+            divAddress.innerHTML = currentAccount;
+        } else {
+            if (ethereum.selectedAddress == null && currentAccount == null) {
+                console.log("Display State: Disconnected");
+                btnConnect.innerHTML = "Connect";
+                divAddress.innerHTML = " ";
+            } else {
+                console.log("Display State: Locked");
+                btnConnect.innerHTML = "Unlock Wallet";
+                divAddress.innerHTML = " ";
+            }
+        }
+        btnConnect.disabled = false;
+    }
+    async function setConnection(button) {
+        // Button was clicked & we're not connected
+        if ( !connected() && button == true) {
+            // Request addresses to connect
+            ethereum.request({ method: 'eth_requestAccounts' }).then(handleAccountsChanged).catch((err) => {
+                if (err.code === 4001) {
+                    //console.log('MetaMask request rejected.');
+                } else {
+                    console.error(err);
+                }
+                btnConnect.disabled = false;
+            });
+        } else {
+            // selectedAddress != null => connected == true
+            currentAccount = ethereum.selectedAddress;
+            handleAccountsChanged();
+        }
+    }
+    ethereum.on('accountsChanged', handleAccountsChanged);
+    function handleAccountsChanged(accounts) {
+        //accounts will be null when button not clicked
+        if (accounts != null){
+            if (accounts.length === 0) {
+                console.log('MetaMask is locked or the user has not connected any accounts.');
+                currentAccount = null;
+            } else {
+                currentAccount = accounts[0];
+            }
+        }
+        displayConnected();
+    }
+    // 'cryption methods
+    async function decrypt(encMsg) {
+        return await ethereum.request({
+            method: 'eth_decrypt',
+            params: [encMsg, currentAccount]
+        }).catch((err) => {
+            if (err.code === -32603) {
+                //Metamask throws this anyway
+            } else {
+                console.error(err);
+            }
+        });
+    }
+    async function getPublicKey() { 
+        const encryptionPublicKey = await ethereum.request({
+                method: 'eth_getEncryptionPublicKey',
+                params: [currentAccount]
+        });
+    }
+    async function encrypt (pubKey, msg) {
+        const buf = buffer.Buffer.from(
+            JSON.stringify(
+                ethSigUtil.encrypt(
+                pubKey,
+                { data: msg },
+                'x25519-xsalsa20-poly1305'
+                )
+            ),
+            'utf8'
+        );
+        return '0x' + buf.toString('hex')
+    }
+    // Window Onload Event: set element handles & call main
+    window.addEventListener('load', async () => {
+        btnConnect = document.getElementById("btnConnect");
+        btnUpdate = document.getElementById("btnUpdate");
+        divAddress = document.getElementById("address");    
+        txtVariable = document.getElementById("variable");
+        divGreeting = document.getElementById("greeting");
+        btnEncrypt = document.getElementById("btnEncrypt");
+        btnDecrypt = document.getElementById("btnDecrypt");
+        spanDecryptOut = document.getElementById("spanDecryptOut");
+        spanEncryptOut = document.getElementById("spanEncryptOut");
+        txtEncrypt = document.getElementById("txtEncrypt");
+        txtDecrypt = document.getElementById("txtDecrypt");
+        txtEncryptTo = document.getElementById("txtEncryptTo");
+        
+        var dt = setTimeout(main, 500);
+    });
+    </script>
+</head>
+<body>
+    <div>
+        <div id="address"></div><button id="btnConnect">Connect</button>
+    </div>
+    <div class="container">
+        <h1>Contract</h1>
+
+        <h2 id="greeting"></h2>
+
+        <label for="variable" class="col-lg-2 control-label">Variable</label>
+        <input id="variable" type="text">
+        <button id="btnUpdate">Update</button>
+        <br>
+        <label for="txtEncrypt" class="col-lg-2 control-label">Encrypt</label>
+        To<input id="txtEncryptTo" type="text"><br>
+        Message<input id="txtEncrypt" type="text">
+        <span id="spanEncryptOut"></span>
+        <button id="btnEncrypt">Update</button>
+
+        <label for="txtDecrypt" class="col-lg-2 control-label">Decrypt</label>
+        <input id="txtDecrypt" type="text">
+        <span id="spanDecryptOut"><span></span>
+        <button id="btnDecrypt">Update</button>
+    </div>
+    <script>
+    async function main() {
+        setConnection(false); //init connection: check with connected();
+        
+        async function updateGreeting() {
+            this.disabled = true; //disable button until done processing
+            if (connected()){
+                var greeting = txtVariable.value;
+                await greeterContract_rw.setGreeting(greeting).catch((err) => {
+                    this.disabled = false;
+                    if (err.code === 4001){
+                        // Metamask throws user rejection
+                    } else if (err.code == "UNSUPPORTED_OPERATION") {
+                        // No active address
+                    } else {
+                        console.error(err);
+                    }
+                });
+            } else {
+                alert("Please connect your wallet and then try again.");
+                btnConnect.disabled = true;
+                await setConnection(true);
+                btnUpdate.disabled = false;
+            }
+        }
+        btnUpdate.addEventListener("click", updateGreeting);
+        btnConnect.addEventListener("click", async function() {
+            this.disabled = true; //disable button until done processing
+            if ( !connected() ) {
+                if (window.ethereum != null) {
+                    await setConnection(true).then(Refresh);
+                } else {
+                    console.log("Please install metamask");
+                }
+            } else {
+                currentAccount = null;
+                handleAccountsChanged();
+            }
+        });
+        async function displayGreeting() {
+            divGreeting.innerHTML = await greeterContract.greet();
+            btnUpdate.disabled = false;
+        }
+        
+        btnEncrypt.addEventListener("click", async function() {
+            this.disabled = true; //disable button until done processing
+            if ( connected() ) {
+                spanEncryptOut.innerHTML = await encrypt(txtEncryptTo.value, txtEncrypt.value).then(this.disabled = false);
+            }
+        });
+        btnDecrypt.addEventListener("click", async function() {
+            this.disabled = true; //disable button until done processing
+            if ( connected() ) {
+                spanDecryptOut.innerHTML = await decrypt(txtDecrypt.value).then(this.disabled = false);
+            }
+        });
+
+        function Refresh() {
+            if (connected()) {
+                provider = new ethers.providers.Web3Provider(ethereum, "any");
+                signer = provider.getSigner();
+                // Contract interfaces
+                greeterContract = new ethers.Contract(contractAddress, abi, provider);
+                greeterContract_rw = new ethers.Contract(contractAddress, abi, signer);
+                //
+                provider.on(greeterContract_rw.filters.GreetingChanged(), displayGreeting);
+
+                displayGreeting();
+            }
+        }
+        Refresh();
+    }
+    </script>
+</body>
+</html>
